@@ -122,3 +122,150 @@ suspend fun newRoutine(){
 2. 한스레드는 오직 한 프로세스에만 포함되어 있다. 한 코루틴의 코드는 여러 스레드에서 실행될 수 있다
 3. 스레드는 context switching발생시 stack영역이 교체. 코루틴은 (한스레드에서 실행되는경우 )context switchign시 메모리 교체가 없다
 4. 스레드는 os가 스레드를 강제로 멈추고 다른 스레드를 실행한다. 코루틴은 스스로가 다른 코루틴에게 양보한다
+
+# part 3 코루틴 빌더와 Job
+
+## 1. runBlocking
+
+```kotlin
+fun main() = runBlocking {
+    
+}
+```
+
+새로운 코루틴을 만들고, 루틴 세계와 코루틴 세계를 이어준다. (이름에 blocking이 들어가 있다!!)
+
+RunBlocking으로 인해 만들어진 Coroutine과 안에서 추가적으로 만든 Coroutine이 모두 다 완료될 때 까지 스레드를 Blocking한다
+
+스레드는 RunBlocking에 의해 Blocking된 게 풀릴때까지 다른 코드를 실행할 수 없다
+
+```kotlin
+fun main() {
+    runBlocking {
+        printWithThread("START")
+        launch {
+            delay(2000) // yield()와 같은 기능이지만 특정 시간만큼 멈추고 다른 코루틴으로 넘기는 것
+            printWithThread("Launch End")
+        }
+    }
+    printWithThread("END")
+}
+```
+End가 출력되려면 아무 의미없이 2초를 기다려야함. 그러기에 runBlocking의 경우 프로그램에 진입할 때 최초로 작성해주거나 특정 테스트 코드에서 사용하는 것이 좋다
+
+## 2. launch
+
+```kotlin
+       val job : CoroutineScope =  launch {
+            printWithThread("Launch End")
+        }
+```
+
+반환값이 없는 코드를 실행한다. 위 코드에서 job은 코루틴을 제어할 수 있는 객체 Job!
+
+```kotlin
+fun main(): Unit = runBlocking {
+    val job = launch(start = CoroutineStart.LAZY) {
+        printWithThread("Hello launch")
+    }
+    delay(1000)
+    job.start()
+}
+```
+
+위 코드는 1초 기다렸다가 Job을 실행시키는 제어를한다
+
+```kotlin
+fun main(): Unit = runBlocking {
+    val job = launch {
+        (1..5).forEach {
+            printWithThread(it)
+            delay(500)
+        }
+    }
+
+    delay(1_000)
+    job.cancel()
+}
+```
+
+다음처럼 job을 cancel시킬 수도 있다 위 코드에서 출력은 2까지 노출
+
+```kotlin
+fun main(): Unit = runBlocking {
+    val job1 = launch {
+        delay(1000)
+        printWithThread("Job 1")
+    }
+
+    job1.join()
+
+    val job2 = launch {
+        delay(1000)
+        printWithThread("Job 2")
+    }
+
+}
+```
+
+위 코드는 job1이 완전히 끝나고 job2를 실행시킨다
+
+### Job 객체 활용 정리
+
+- start() : 시작 신호
+- cancel() : 취소 신호
+- join() : 코루틴이 완료될 때까지 대기
+
+## 3. async
+
+```kotlin
+fun main(): Unit = runBlocking {
+    val job = async {
+        3 + 5
+    }
+    val eight = job.await() // await: async의 결과값을 반환
+    println(eight)
+}
+```
+
+주어진 함수의 실행 결과를 반환할 수 있다
+
+### 활용 예시 
+
+```kotlin
+fun main(): Unit = runBlocking {
+
+    val time = measureTimeMillis {
+
+
+        val job1 = async { apiCall1() }
+        val job2 = async { apiCall2() }
+
+        printWithThread("Result: ${job1.await() + job2.await()}")
+    }
+    printWithThread("Completed in $time ms")
+}
+
+suspend fun apiCall1() : Int {
+    delay(1000)
+    return 1
+}
+
+suspend fun apiCall2() : Int {
+    delay(1000)
+    return 2
+}
+```
+
+### async 활용
+
+여러 API를 동시에 호출하여 소요시간을 최소화할 수 있다
+
+callback을 이용하지 않고 `동기 방식`으로 코드를 작성할 수 있다
+
+### async 주의 사항
+
+CoroutineStart.LAZY 옵션을 사용하면, await()함수를 호출했을 때 계산 결과를 계속 기다린다
+
+CoroutineStart.LAZY 옵션을 사용후, start() 함수를 한 번 호출하면 괜찮다
+
