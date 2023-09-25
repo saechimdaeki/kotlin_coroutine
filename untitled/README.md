@@ -269,3 +269,103 @@ CoroutineStart.LAZY 옵션을 사용하면, await()함수를 호출했을 때 �
 
 CoroutineStart.LAZY 옵션을 사용후, start() 함수를 한 번 호출하면 괜찮다
 
+# part4 코루틴의 취소
+
+### 코루틴을 적절히 취소하는 것은 중요하다
+
+필요하지 않은 코루틴을 적절히 취소해 컴퓨터 자원을 아껴야 한다
+
+(만약 필요하지 않은 코루틴을 취소하지 않는다면 그 코루틴이 계속 사용됨으로써 cpu나 메모리 자원을 잡아먹기도함)
+
+### cancel() 함수를 활용하면 되지만...
+
+코루틴도 취소에 협조를 해 주어야한다
+
+### 취소에 협조하는 방법 1
+
+delay()/ yield() 같은 kotlinx.coroutines 패키지의 suspend 함수를 사용!
+
+```kotlin
+fun main() : Unit = runBlocking {
+    val job = launch {
+        var i = 1
+        var nextPrintTime = System.currentTimeMillis()
+        while (i <= 5) {
+            if (nextPrintTime <= System.currentTimeMillis()) {
+                printWithThread("${i++} 번째 출력")
+                nextPrintTime += 1000L
+            }
+        }
+    }
+
+    delay(100L)
+    job.cancel()
+}
+```
+위와 같은 코드는 취소가 되지 않음을 알 수 있는데 여기서 바로 협력하는 Coroutine이어야만 취소가 가능하다
+
+### 취소에 협조하는 방법 2
+
+코루틴 스스로 본인의 상태를 확인해 취소 요청을 받았다면, `CancellationException`을 던지자
+
+```kotlin
+fun main() : Unit = runBlocking {
+    val job = launch(Dispatchers.Default) {
+        var i = 1
+        var nextPrintTime = System.currentTimeMillis()
+        while (i <= 5) {
+            if (nextPrintTime <= System.currentTimeMillis()) {
+                printWithThread("${i++} 번째 출력")
+                nextPrintTime += 1000L
+            }
+
+            if (!isActive) {
+                throw CancellationException()
+            }
+        }
+    }
+
+
+    delay(100)
+    job.cancel()
+}
+
+```
+
+launch옵션에 Dispathers.Default를 주면 이 코루틴은 다른 스레드에서 동작하고 메인 스레드와는 별개의 스레드가 된다
+
+- isActive: 현재 코루틴이 활성화되어 있는지, 취소 신호를 받았는지
+- Dispatchers.Default : 우리의 코루틴을 다른 스레드에 배정
+
+## 코루틴이 취소에 협조하는 방법 정리
+1. kotlinx.coroutines 패키지의 suspend 함수를 호출
+2. isActive로 CancellationException을 던지기
+
+### 사실 delay() 같은 함수도
+
+`CancellationException` 예외를 던져 취소하고 있었다
+
+```kotlin
+fun main() : Unit = runBlocking {
+    val job = launch {
+        try {
+            delay(100L)
+        }catch (e: CancellationException) {
+            // 아무것도 안한다
+        } finally {
+            // 필요한 자원을 닫을 수도 있다
+            
+        }
+
+        printWithThread("delay에 의해 취소되지 않았다")
+    }
+
+    delay(100)
+    printWithThread("취소 시작")
+    job.cancel()
+}
+```
+
+그래서 Coroutine 취소의 첫번째 방법인 Suspend fun을 호출하는 방법은 try-catch-finally의 영향을 받는다
+
+
