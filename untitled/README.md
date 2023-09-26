@@ -369,3 +369,128 @@ fun main() : Unit = runBlocking {
 그래서 Coroutine 취소의 첫번째 방법인 Suspend fun을 호출하는 방법은 try-catch-finally의 영향을 받는다
 
 
+# part 5 코루틴의 예외 처리와 Job의 상태 변화
+
+```kotlin
+fun main() : Unit = runBlocking { 
+    val job1 = launch{
+        delay(1000)
+        printWithThread("Job1")
+    }
+    
+    val job2 = launch {
+        delay(1000)
+        printWithThread("Job2")
+    }
+}
+```
+
+### 현재 중첩된 코루틴 간의 관계는 
+
+```markdown
+runBlocking (부모 코루틴) -> launch (자식 코루틴)
+                       -> launch (자식 코루틴)
+```
+
+### 새로운 root 코루틴을 만들고 싶다면? 
+
+새로운 영역(CoroutineScope)을 만들어야한다
+
+```kotlin
+fun main() : Unit = runBlocking {
+    val job1 = CoroutineScope(Dispatchers.Default).launch{
+        delay(1000)
+        printWithThread("Job1")
+    }
+
+    val job2 = CoroutineScope(Dispatchers.Default).launch {
+        delay(1000)
+        printWithThread("Job2")
+    }
+}
+```
+
+다음과 같이 작성하면 새로운 영역의 코루틴은 root 코루틴이 된다 
+
+### launch와 async의 예외 발생 차이
+
+- `launch` : 예외가 발생하면, 예외를 출력하고 코루틴이 종료
+- `async` : 예외가 발생해도, 예외를 출력하지 않음. 예외를 확인하려면 await()이 필요함
+
+### 참고로 자식 코루틴의 예외는 부모에게 전파된다
+
+### 만약 자식 코루틴의 예외를 부모에게 전파하고 싶지 않다면?
+
+`SupervisorJob()`
+
+```kotlin
+fun main() = runBlocking {
+    val job = async(SupervisorJob()) {
+        throw IllegalArgumentException()
+    }
+
+    delay(1000)
+}
+```
+
+### 예외를 다루는 방법1
+
+직관적인 try - catch - finally
+
+```kotlin
+fun main() = runBlocking {
+    val job = launch {
+        try{
+            throw IllegalArgumentException()
+        } catch (e: IllegalArgumentException) {
+            printWithThread("정상 종료")
+        }
+    }
+}
+```
+
+### 예외를 다루는 방법2
+
+CoroutineExceptionHandler를 사용 (try catch와 달리 예외 발생 이후 에러 로깅/ 에러메시지 전송 등에 활용)
+
+### CoroutineExceptionHandler의 두 가지 파라미터
+
+```kotlin
+val exceptionHandler = CoroutineExceptionHandler { context, throwable ->
+    printWithThread("예외 발생 : ${throwable.message}")
+}
+```
+
+```kotlin
+fun main() = runBlocking {
+    val exceptionHandler = CoroutineExceptionHandler { coroutineContext, throwable ->
+        printWithThread("예외")
+    }
+
+    val job  = CoroutineScope(Dispatchers.Default).launch(exceptionHandler) {
+        throw IllegalArgumentException()
+    }
+
+    delay(1000)
+}
+```
+
+### CoroutineExceptionHandler 주의할 점
+
+launch에만 적용 가능하고, 부모 코루틴이 있으면 동작하지 않는다!!!!
+
+### 그런데 궁금한점이 생긴다
+
+취소도 `CancellationException`이라는 예외였는데 일반적인 예외랑 어떻게 다른걸까?
+
+# 코루틴 취소 예외 한방정리
+
+- CASE 1. 발생한 예외가 CancellationException인 경우 `취소`로 간주하고 부모 코루틴에게 전파 X
+- CASE 2. 그 외 다른 예외가 발생한 경우 `실패`로 간주하고 부모 코루틴에게 전파
+- 다만 내부적으로 취소나 실패 모두 `취소됨`상태로 관리함
+
+### Job(코루틴)의 Life cycle
+
+<img width="567" alt="image" src="https://github.com/saechimdaeki/Dev-Diary/assets/40031858/12d0e354-db2a-420d-a14e-59eb1bb35ec8">
+
+
