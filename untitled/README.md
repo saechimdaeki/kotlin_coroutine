@@ -541,4 +541,140 @@ Structured Concurrency는 코드 내의 에러가 유실되지 않고 적절히 
 
 다만, CancellationException은 정상적인 취소로 간주하기 때문에 부모 코루틴에게 전파되지 않고, 부모 코루틴의 다른자식 코루틴을 취소시키지도 않는다
 
+# part7 CoroutineScope과 CoroutineContext
+
+```kotlin
+fun main() : Unit = runBlocking {
+    val job1 = CoroutineScope(Dispatchers.Default).launch{
+        delay(1000)
+        printWithThread("Job1")
+    }
+}
+```
+
+### 사실 launch / async는
+
+CoroutineScope의 확장함수이다
+
+지금까지 runBlocking이 코루틴과 루틴의 세계를 이어주며 CoroutineScope을 제공해주었다
+
+### 우리가 직접 CoroutineScope을 만들면
+
+runBlocking이 필요하지 않다
+
+```kotlin
+fun main() {
+    CoroutineScope(Dispatchers.Default).launch { 
+        delay(1000)
+        printWithThread("Job1")
+    }
+    Thread.sleep(1500L)
+}
+```
+
+### CoroutineScope의 주요 역할은 무엇일까?
+
+CoroutineContrxt라는 데이터를 보관하는 것!
+
+```kotlin
+public interface CoroutineScope {
+    public val coroutineContext: CoroutineContext
+}
+```
+
+### CoroutineContext란?!
+
+코루틴과 관련된 여러가지 데이터를 갖고 있다!
+
+코루틴의 이름, CoroutineExceptionHandler, 코루틴 그 자체, CoroutineDispatcher
+
+### Dispatcher
+
+코루틴이 어떤 스레드에 배정될지를 관리하는 역할
+
+## 중간 정리
+
+- CoroutineScope : 코루틴이 탄생할 수 있는 영역
+- CoroutineContext : 코루틴과 관련된 데이터를 보관
+
+### 코루틴의 Structured Concurrency 기반 
+
+<img width="608" alt="image" src="https://github.com/saechimdaeki/Dev-Diary/assets/40031858/f1f7da1c-a682-404a-9cfc-36ccffe53501">
+
+이때 부모-자식 관계도 설정해준다
+
+### 클래스 내부에서 독립적인 CoroutineScope을 관리
+
+해당 클래스에서 사용하던 코루틴을 한 번에 종료시킬 수 있다
+
+```kotlin
+class AsyncLogic {
+    private val scope = CoroutineScope(Dispatchers.Default)
+
+    fun doSomething() {
+        scope.launch {
+            // 무언가 코루틴이 시작되어 작업!
+        }
+    }
+
+    fun destroy() {
+        scope.cancel()
+    }
+}
+```
+
+### CoroutineContext
+
+Map + Set을 합쳐놓은 형태
+
+key- value로 데이터 저장. 같은 key의 데이터는 유일
+
+```kotlin
+fun main() {
+    CoroutineName("나만의 코루틴") + Dispatchers.Default
+}
+
+suspend fun example2(){
+    val job = CoroutineScope(Dispatchers.Default).launch {
+        delay(1000)
+        printWithThread("Job1")
+        coroutineContext + CoroutineName("이름")
+        coroutineContext.minusKey(CoroutineName.Key)
+    }
+    job.join()
+}
+```
+
+### CoroutineDispatcher
+
+<img width="953" alt="image" src="https://github.com/saechimdaeki/Dev-Diary/assets/40031858/fabd9ca2-91b0-4d58-8128-31e67214f2a4">
+
+코루틴을 스레드에 배정하는 역할
+
+### Dispathcers.Default
+
+가장 기본적인 디스패처, CPU자원을 많이 쓸 때 권장. 별다른 설정이 없다면 이 디스패처가 사용됨
+
+### Dispatchers.IO
+
+I/O작업에 최적화된 디스패처
+
+### Dispatchers.Main
+
+보통 UI 컴포넌트를 조작하기 위한 디스패처. 특정 의존성을 갖고 있어야 정상적으로 활용할 수 있다
+
+### ExecutorService를 디스패처로
+
+asCoroutineDispatcher() 확장함수 활용
+
+```kotlin
+fun main() {
+    CoroutineName("나만의 코루틴") + Dispatchers.Default
+    val threadPool = Executors.newSingleThreadExecutor()
+    CoroutineScope(threadPool.asCoroutineDispatcher()).launch {
+        printWithThread("코루틴 시작")
+    }
+}
+
+```
 
