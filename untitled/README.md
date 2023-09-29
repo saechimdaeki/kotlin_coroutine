@@ -678,3 +678,118 @@ fun main() {
 
 ```
 
+# part 8 suspending function
+
+### suspending function
+
+suspend가 붙은 함수. 다른 suspend를 붙은 함수를 호출할 수 있다
+
+### 어떻게 fun main 에서 delay()를 호출했을까?
+
+```kotlin
+fun main() : Unit = runBlocking {
+    launch {
+        delay(100L)
+    }
+}
+```
+
+### launch의 시그니처를 살펴보면
+
+```kotlin
+public fun CoroutineScope.launch(
+    context: CoroutineContext = EmptyCoroutineContext,
+    start: CoroutineStart = CoroutineStart.DEFAULT,
+    block: suspend CoroutineScope.() -> Unit
+): Job {}
+```
+
+여기서 ` block: suspend CoroutineScope.()` 이 부분을 suspending lambda라고 함
+
+### suspend 함수는
+
+코루틴이 중지되었다가 재개 될 수 있는 지점. (suspending function)
+
+### suspending function 함수의 활용
+
+여러 비동기 라이브러리를 사용할 수 있도록 도와준다
+
+```kotlin
+fun main() : Unit = runBlocking {
+    val result1 = async {
+        call1()
+    }
+
+    val result2 = async {
+        call2(result1.await())
+    }
+
+    printWithThread(result2.await())
+}
+
+fun call1() : Int {
+    Thread.sleep(1000)
+    return 1
+}
+
+fun call2(num: Int) : Int {
+    Thread.sleep(1000)
+    return num * 2
+}
+```
+
+suspend를 통해 다음 코드를 작성할 수 있다 (main에서는 의존성이 없는 코드를 작성할 수 있다)
+
+```kotlin
+fun main() : Unit = runBlocking {
+    val result1 = call1()
+
+    val result2 = call2(result1)
+
+    printWithThread(result2)
+}
+
+suspend fun call1() : Int {
+    return CoroutineScope(Dispatchers.Default).async {
+        Thread.sleep(1000)
+        1
+    }.await()
+}
+
+suspend fun call2(num: Int) : Int {
+    return CompletableFuture.supplyAsync {
+        Thread.sleep(1000)
+        100
+    }.await()
+}
+```
+
+## 추가적인 suspend 함수들
+
+- CoroutineScope : 추가적인 코루틴을 만들고, 주어진 함수 블록이 바로 실행된다. 만들어진 코루틴이 모두 완료되면 다음 코드로 넘어간다
+- withContext : coroutineScope와 기본적으로 유사하다. context에 변화를 주는 기능이  추가적으로 있다
+```kotlin
+fun main() = runBlocking {
+    printWithThread("START")
+    calculateResult()
+    printWithThread("END")
+}
+
+suspend fun calculateResult() : Int = withContext(Dispatchers.Default) {
+    val num1 = async {
+        delay(1000)
+        10
+    }
+
+    val num2 = async {
+        delay(1000)
+        20
+    }
+
+    num1.await() + num2.await()
+}
+```
+
+withContext는 추가적인 원소를 덮처쓰고 싶을때 사용
+
+- withTimeout/ withTimeoutOrNull : 주어진 시간 안에 코루틴이 완료되지 못하면 예외를 던지게/ null을 반환하게 된다
