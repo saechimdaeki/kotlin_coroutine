@@ -793,3 +793,60 @@ suspend fun calculateResult() : Int = withContext(Dispatchers.Default) {
 withContext는 추가적인 원소를 덮처쓰고 싶을때 사용
 
 - withTimeout/ withTimeoutOrNull : 주어진 시간 안에 코루틴이 완료되지 못하면 예외를 던지게/ null을 반환하게 된다
+
+# part 9 코루틴과 Continuation
+
+```kotlin
+class UserServiceV2 {
+
+    private val userProfileRepository = UserProfileRepositoryV2()
+    private val userImageRepository = UserImageRepositoryV2()
+
+    suspend fun findUser(userId: Long): UserDtoV2 {
+        // 0단계 - 초기 시작 
+        println("유저를 가져오겠습니다")
+        val profile = userProfileRepository.findProfile(userId)
+        // 1단계 - 1차 중단 후 재시작
+        println("이미지를 가져오겠습니다")
+        val image = userImageRepository.findImage(profile)
+        // 2단계 - 2차 중단 후 재시작
+        return UserDtoV2(profile, image)
+    }
+
+}
+
+data class UserDtoV2(
+    val profile: ProfileV2,
+    val image: ImageV2,
+)
+
+
+class UserProfileRepositoryV2 {
+    suspend fun findProfile(userId: Long): ProfileV2 {
+        delay(100L)
+        return ProfileV2()
+    }
+}
+
+class ProfileV2
+
+class UserImageRepositoryV2 {
+    suspend fun findImage(profile: ProfileV2): ImageV2 {
+        delay(100L)
+        return ImageV2()
+    }
+}
+```
+
+### 9강은 part9_코루틴과_Continuation 참고
+
+### 실제 Continuation 인터페이스
+
+```kotlin
+
+public interface Continuation<in T> {
+    public val context: CoroutineContext
+    
+    public fun resumeWith(result: Result<T>)
+}
+```
