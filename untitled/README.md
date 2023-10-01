@@ -850,3 +850,16 @@ public interface Continuation<in T> {
     public fun resumeWith(result: Result<T>)
 }
 ```
+
+# part10 코루틴의 활용과 마무리
+
+### 코루틴의 특징
+- callback hell을 해결
+- kotlin언어 키워드가 아닌 라이브러리
+
+### 비동기 non-blocking 혹은 동시성이 필요한 곳에 사용
+
+- client: Asynchronous UI (Android, iOS)
+- Server : 여러 API를 동시에 호출
+- webflux(비동기 non-blocking 프레임워크)
+- 동시성 테스트
